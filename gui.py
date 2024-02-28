@@ -1,103 +1,157 @@
 import socket
-import tkinter as tk
-import tkinter
-from tkinter import messagebox
-from PIL import Image, ImageTk
+import sys
 import threading
+import time
+from tkinter import *
+from PIL import Image, ImageTk
 
-# Declare global variables
-entry_ip = None
-entry_start_port = None
-entry_end_port = None
-result_text = None
+# Scan Vars
+ip_s = 1
+ip_f = 1024
+log = []
+ports = []
+target = 'localhost'
 
-def scanHost():
-    global entry_ip, entry_start_port  # Add these lines to declare the global variables
-    root = tkinter.Tk()  # Example, make sure to create your Tkinter window properly
-    
-    ip = entry_ip.get()
-    startPort = int(entry_start_port.get())
-    endPort = int(entry_end_port.get())
-    result_text.delete('1.0', tk.END)
-    result_text.insert(tk.END, f"Scanning host {ip} from port {startPort} to {endPort}...\n")
-    open_ports = []
-    threads = []
-    for port in range(startPort, endPort + 1):
-        t = threading.Thread(target=scanPort, args=(ip, port, open_ports))
-        t.start()
-        threads.append(t)
-    for t in threads:
-        t.join()
-    if open_ports:
-        result_text.insert(tk.END, f"Open ports: {', '.join(map(str, open_ports))}\n")
-    else:
-        result_text.insert(tk.END, "No open ports found.\n")
-
-def scanPort(ip, port, open_ports):
+# ==== Scanning Functions ====
+def scanPort(target, port):
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as tcp:
-            tcp.settimeout(0.1)  # Set timeout to 0.1 seconds
-            if not tcp.connect_ex((ip, port)):
-                open_ports.append(port)
-    except Exception:
-        pass
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(4)
+        c = s.connect_ex((target, port))
+        if c == 0:
+            m = 'Port %d \t[open]' % (port,)
+            log.append(m)
+            ports.append(port)
+            listbox.insert("end", str(m))
+            updateResult()
+        s.close()
+    except OSError:
+        print('> Too many open sockets. Port' + str(port))
+    except:
+        s.close()
+        sys.exit()
 
-def onScanHost():
+def updateResult():
+    rtext = "[" + str(len(ports)) + "/" + str(ip_f) + "]" + str(target)
+    L27.configure(text=rtext)
+
+def startScan():
+    global ports, log, target, ip_f, ip_s
+    clearScan()
+    log = []
+    ports = []
+    # Get ports ranges from GUI
+    ip_s = int(L24.get())
+    ip_f = int(L25.get())
+
+    # Start writing the log file
+    log.append('> Port Scanner')
+    log.append('=' * 14 + '\n')
+    log.append(' Target:\t' + str(target))
+
     try:
-        # Create a new thread for port scanning
-        threading.Thread(target=scanHost, daemon=True).start()
-    except ValueError:
-        messagebox.showerror("Error", "Please enter valid port numbers.")
-    except Exception as e:
-        messagebox.showerror("Error", f"An error occurred: {str(e)}")
+        target = socket.gethostbyname(str(L22.get()))
+        log.append(' IP Adr.:\t' + str(target))
+        log.append(' Ports: \t[' + str(ip_s) + '/' + str(ip_f) + ']')
+        log.append('\n')
 
-def main():
-    global entry_ip, entry_start_port, entry_end_port, result_text
-    
-    root = tk.Tk()
-    root.title("TCP Port Scanner")
+        # Lets start scanning ports!
+        while ip_s <= ip_f:
+            try:
+                scan = threading.Thread(target=scanPort, args=(target, ip_s))
+                scan.setDaemon(True)
+                scan.start()
+            except:
+                time.sleep(0.01)
+            ip_s += 1
+    except:
+        m = '> Target ' + str(L22.get()) + ' not found.'
+        log.append(m)
+        listbox.insert(0, str(m))
 
-    # Styling
-    root.geometry('800x400')
+def saveScan():
+    global log, target, ports, ip_f
+    log[5] = "Result:\t[" + str(len(ports)) + "/" + str(ip_f) + " ]\n"
+    with open('portscan-' + str(target) + '.txt', mode='wt', encoding='utf-8') as myfile:
+        myfile.write('\n'.join(log))
 
-    # Load the background image
-    background_image = Image.open(r"C:\Users\ghimi\Downloads\123.jpg")  # Replace with your image file
-    background_photo = ImageTk.PhotoImage(background_image)
-    
-    # Create a Canvas to put the background image
-    canvas = tk.Canvas(root, width=background_image.width, height=background_image.height)
-    canvas.pack(fill="both", expand=True)
-    canvas.create_image(0, 0, anchor="nw", image=background_photo)
+def clearScan():
+    listbox.delete(0, 'end')
 
-    # Title label
-    label_title = tk.Label(canvas, text="Port Scanner", font=("Helvetica", 20, "bold"), bg='black', fg='#4CAF50')
-    label_title.place(relx=0.5, rely=0.1, anchor="center")
+# ==== GUI ====
+gui = Tk()
+gui.title('Port Scanner')
+gui.geometry("400x600+20+20")
 
-    label_ip = tk.Label(canvas, text="IP Address:", bg='pink', fg='black',font=("Helvetica", 10, "bold"))
-    label_ip.place(relx=0.3, rely=0.25, anchor="e")
+# ==== Colors ====
+fgc = 'red'
+bgc = 'light blue'
+third = 'red'
+abc = 'red'
 
-    entry_ip = tk.Entry(canvas, width=20)
-    entry_ip.place(relx=0.4, rely=0.25, anchor="w")
+gui.tk_setPalette(background=bgc, foreground=fgc, activeBackground=abc, activeForeground=bgc, highlightColor=bgc,
+                  highlightBackground=fgc)
 
-    label_start_port = tk.Label(canvas, text="Start Port:" , bg='pink', fg='black',font=("Helvetica", 10, "bold"))
-    label_start_port.place(relx=0.3, rely=0.35, anchor="e")
+# Load the background image
+background_image = Image.open(r"C:\Users\ghimi\Downloads\Untitled.jpeg") 
 
-    entry_start_port = tk.Entry(canvas, width=10)
-    entry_start_port.place(relx=0.4, rely=0.35, anchor="w")
+# Define the desired size for the background image
+desired_width = 90
+desired_height = 90
 
-    label_end_port = tk.Label(canvas, text="End Port:", bg='pink', fg='black',font=("Helvetica", 10, "bold"))
-    label_end_port.place(relx=0.3, rely=0.45, anchor="e")
+# Resize the background image
+resized_image = background_image.resize((desired_width, desired_height))
+background_photo = ImageTk.PhotoImage(resized_image)
 
-    entry_end_port = tk.Entry(canvas, width=10)
-    entry_end_port.place(relx=0.4, rely=0.45, anchor="w")
+# Create a Canvas to put the background image
+canvas = Canvas(gui, width=desired_width, height=desired_height)
+canvas.pack(fill="both", expand=True)
+# Put the background image on the canvas
+canvas.create_image(0, 0, anchor=NW, image=background_photo)
 
-    scan_button = tk.Button(canvas, height=1, width=6,text="Scan", font=("Helvetica", 10, "bold"), command=onScanHost, bg='Green', fg='white')
-    scan_button.place(relx=0.5, rely=0.55, anchor="center")
+# ==== Labels ====
+L11 = Label(gui, text="Port Scanner", font=("Helvetica", 18, 'underline',"bold"))
+L11.place(x=210, y=10)
 
-    result_text = tk.Text(canvas, height=5, width=50, bg='pink', fg='black')  # Set background color for the result text
-    result_text.place(relx=0.5, rely=0.7, anchor="center")
+L21 = Label(gui, text="Target: ")
+L21.place(x=16, y=90)
 
-    root.mainloop()
+L22 = Entry(gui)
+L22.place(x=180, y=90)
+L22.insert(0, "localhost")
 
-if __name__ == "__main__":
-    main()
+L23 = Label(gui, text="Ports: ")
+L23.place(x=16, y=158)
+
+L24 = Entry(gui)
+L24.place(x=180, y=158, width=95)
+L24.insert(0, "1")
+
+L25 = Entry(gui)
+L25.place(x=290, y=158, width=95)
+L25.insert(0, "1024")
+
+L26 = Label(gui, text="Results: ")
+L26.place(x=16, y=220)
+L27 = Label(gui, text="[ ... ]")
+L27.place(x=180, y=220)
+
+# ==== Ports list ====
+frame = Frame(gui)
+frame.place(x=16, y=275, width=370, height=215)
+listbox = Listbox(frame, width=59, height=6)
+listbox.place(x=0, y=0)
+listbox.bind('<<ListboxSelect>>')
+scrollbar = Scrollbar(frame)
+scrollbar.pack(side=RIGHT, fill=Y)
+listbox.config(yscrollcommand=scrollbar.set)
+scrollbar.config(command=listbox.yview)
+
+# ==== Buttons / Scans ==
+B11 = Button(gui, text="Start Scan", command=startScan)
+B11.place(x=16, y=500, width=170)
+B21 = Button(gui, text="Save Result", command=saveScan)
+B21.place(x=210, y=500, width=170)
+
+# ==== Start GUI ==
+gui.mainloop()
