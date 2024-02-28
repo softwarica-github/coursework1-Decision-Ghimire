@@ -1,0 +1,11 @@
+> Port Scanner
+==============
+
+ Target:	1.1.1.1
+ IP Adr.:	192.168.10.67
+ Ports: 	[1/1024]
+Result:	[3/1024 ]
+
+Port 139 	[open]
+Port 135 	[open]
+Port 445 	[open]
